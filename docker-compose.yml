@@ -7,7 +7,6 @@ services:
       - .env
     volumes:
       - output:/app/output
-      - ./projects.json:/app/projects.json
       - ./data:/app/data
 
 volumes:

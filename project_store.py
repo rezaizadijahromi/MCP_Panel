@@ -12,7 +12,7 @@ import engine          # silencer  : DEFAULTS, generate(params) -> summary
 import engine_panel    # panel     : DEFAULTS, generate(params) -> summary
 
 OUTPUT_DIR = engine.OUT_DIR
-DB_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "projects.db")
+DB_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "projects.db")
 
 ENGINES = {
     "silencer": engine,

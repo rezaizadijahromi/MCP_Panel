@@ -30,4 +30,4 @@ config.txt
 
 # Data files
 projects.json
-projects.db
+data/projects.db
