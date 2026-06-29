@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import os
+import sqlite3
 import threading
 import math
 from dataclasses import dataclass, field, asdict
@@ -11,7 +12,7 @@ import engine          # silencer  : DEFAULTS, generate(params) -> summary
 import engine_panel    # panel     : DEFAULTS, generate(params) -> summary
 
 OUTPUT_DIR = engine.OUT_DIR
-STORE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "projects.json")
+DB_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "projects.db")
 
 ENGINES = {
     "silencer": engine,
@@ -75,20 +76,38 @@ _lock = threading.Lock()
 _projects: dict[str, Project] = {}
 
 
-def _save() -> None:
-    with open(STORE_FILE, "w", encoding="utf-8") as fh:
-        json.dump([asdict(p) for p in _projects.values()], fh, indent=2)
+def _db() -> sqlite3.Connection:
+    conn = sqlite3.connect(DB_FILE)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS projects (
+            id      TEXT PRIMARY KEY,
+            name    TEXT NOT NULL,
+            product TEXT NOT NULL,
+            params  TEXT NOT NULL
+        )
+    """)
+    conn.commit()
+    return conn
+
+
+def _save(proj: Project) -> None:
+    with _db() as conn:
+        conn.execute(
+            "INSERT OR REPLACE INTO projects (id, name, product, params) VALUES (?, ?, ?, ?)",
+            (proj.id, proj.name, proj.product, json.dumps(proj.params)),
+        )
 
 
 def _load() -> None:
-    if os.path.exists(STORE_FILE):
-        with open(STORE_FILE, encoding="utf-8") as fh:
-            for row in json.load(fh):
-                _projects[row["id"]] = Project(**row)
+    with _db() as conn:
+        rows = conn.execute("SELECT id, name, product, params FROM projects").fetchall()
+    if rows:
+        for id_, name, product, params_json in rows:
+            _projects[id_] = Project(id_, name, product, json.loads(params_json))
     else:
         for p in _SEED:
             _projects[p.id] = p
-        _save()
+            _save(p)
 
 
 _load()
@@ -157,7 +176,7 @@ def _apply(project_id: str, expected_product: str, changes: dict) -> dict:
             return _err(f"could not regenerate drawing: {e}")
 
         proj.params = candidate
-        _save()
+        _save(proj)
 
     return {
         "ok": True,
