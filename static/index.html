@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Acoustics CAD — Project Copilot</title>
+<!--
+  GIVEN GUI. It keeps the whole conversation in `messages` and re-sends it on
+  every turn (that array IS the chat memory; the LLM remembers nothing).
+  It talks to the backend via:
+     GET  /api/health    -> {ok, model}
+     POST /api/chat      -> {messages:[...]}  =>  {reply, drawing_url}
+  Generated drawings are served from /output/<file>.
+-->
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family: system-ui, sans-serif; background:#0f1419; color:#e6edf3; }
+  header { display:flex; align-items:center; gap:10px; padding:12px 18px;
+           border-bottom:1px solid #232b36; background:#131922; }
+  header h1 { font-size:15px; margin:0; font-weight:600; }
+  .dot { width:9px; height:9px; border-radius:50%; background:#c0392b; }
+  .dot.ok { background:#2ecc71; }
+  .muted { color:#8b97a6; font-size:12px; margin-left:auto; }
+  #log { max-width:760px; margin:0 auto; padding:20px 16px 120px; }
+  .msg { margin:14px 0; display:flex; }
+  .msg .bubble { padding:10px 14px; border-radius:12px; white-space:pre-wrap;
+                 line-height:1.45; max-width:80%; }
+  .msg.user { justify-content:flex-end; }
+  .msg.user .bubble { background:#1f6fb2; }
+  .msg.bot .bubble { background:#1b232e; border:1px solid #232b36; }
+  .msg img { display:block; max-width:100%; border-radius:10px; margin-top:10px;
+             border:1px solid #232b36; }
+  footer { position:fixed; bottom:0; left:0; right:0; background:#0f1419;
+           border-top:1px solid #232b36; }
+  .row { max-width:760px; margin:0 auto; display:flex; gap:8px; padding:12px 16px; }
+  textarea { flex:1; resize:none; background:#131922; color:#e6edf3; font:inherit;
+             border:1px solid #2a3340; border-radius:10px; padding:10px 12px; }
+  button { background:#1f6fb2; color:#fff; border:0; border-radius:10px;
+           padding:0 18px; font-weight:600; cursor:pointer; }
+  button:disabled { opacity:.5; cursor:default; }
+  .hint { color:#8b97a6; font-size:12px; text-align:center; padding:2px 0 8px; }
+</style>
+</head>
+<body>
+  <header>
+    <span class="dot" id="dot"></span>
+    <h1>Acoustics CAD — Project Copilot</h1>
+    <span class="muted" id="model">—</span>
+  </header>
+
+  <div id="log"></div>
+
+  <footer>
+    <div class="row">
+      <textarea id="box" rows="1" placeholder="e.g. Open the atrium silencer and set the length to 1200"></textarea>
+      <button id="send">Send</button>
+    </div>
+    <div class="hint">Try: “What projects do we have?” then “Open the studio panel and set the rockwool to 75 mm.”</div>
+  </footer>
+
+<script>
+const messages = [];            // <-- the whole conversation == the memory
+const log = document.getElementById('log');
+const box = document.getElementById('box');
+const send = document.getElementById('send');
+
+function add(role, text, drawingUrl) {
+  const wrap = document.createElement('div');
+  wrap.className = 'msg ' + (role === 'user' ? 'user' : 'bot');
+  const bubble = document.createElement('div');
+  bubble.className = 'bubble';
+  bubble.textContent = text;
+  if (drawingUrl) {
+    const img = document.createElement('img');
+    img.src = drawingUrl;
+    bubble.appendChild(img);
+  }
+  wrap.appendChild(bubble);
+  log.appendChild(wrap);
+  window.scrollTo(0, document.body.scrollHeight);
+  return bubble;
+}
+
+async function health() {
+  try {
+    const r = await fetch('/api/health'); const j = await r.json();
+    document.getElementById('dot').classList.toggle('ok', !!j.ok);
+    document.getElementById('model').textContent = j.model || 'no API key';
+  } catch { document.getElementById('model').textContent = 'offline'; }
+}
+
+async function sendMsg() {
+  const text = box.value.trim();
+  if (!text) return;
+  box.value = '';
+  add('user', text);
+  messages.push({ role: 'user', content: text });
+  send.disabled = true;
+  const thinking = add('bot', '…');
+  try {
+    const r = await fetch('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messages })       // re-send the full history
+    });
+    const j = await r.json();
+    thinking.textContent = j.reply || '(no reply)';
+    if (j.drawing_url) {
+      const img = document.createElement('img');
+      img.src = j.drawing_url + '?t=' + Date.now();
+      thinking.appendChild(img);
+    }
+    messages.push({ role: 'assistant', content: j.reply || '' });
+  } catch (e) {
+    thinking.textContent = 'Request failed: ' + e;
+  } finally {
+    send.disabled = false;
+    box.focus();
+  }
+}
+
+send.addEventListener('click', sendMsg);
+box.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMsg(); }
+});
+health();
+</script>
+</body>
+</html>
