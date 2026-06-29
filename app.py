@@ -24,7 +24,9 @@ from fastmcp import Client          # MCP client (spawns the server over stdio)
 from google import genai
 from google.genai import types
 
-import project_store as store       # only for OUTPUT_DIR; never mutated here
+import project_store as store       
+from email_intake import router as email_router
+
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 MAX_TOOL_STEPS = 6                  # stop runaway tool loops
@@ -166,7 +168,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 app.mount("/output", StaticFiles(directory=store.OUTPUT_DIR), name="output")
-
+app.include_router(email_router)
 
 @app.get("/api/health")
 def health():

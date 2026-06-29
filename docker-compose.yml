@@ -8,6 +8,7 @@ services:
     volumes:
       - output:/app/output
       - ./data:/app/data
+      - .:/app
 
 volumes:
   output:
