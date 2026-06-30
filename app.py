@@ -1,13 +1,3 @@
-"""
-FastAPI backend — Gemini agent loop over MCP tools.
-
-Routes:
-    GET  /api/health  -> {ok, model}
-    POST /api/chat    -> {messages:[...]} => {reply, drawing_url}
-
-Run:
-    uvicorn app:app --reload
-"""
 import json
 import os
 
@@ -20,7 +10,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from fastmcp import Client          # MCP client (spawns the server over stdio)
+from fastmcp import Client
 from google import genai
 from google.genai import types
 
@@ -155,8 +145,8 @@ async def lifespan(app: FastAPI):
     global MCP, GEMINI, GEMINI_TOOLS
     GEMINI = genai.Client(api_key=API_KEY) if API_KEY else None
 
-    client = Client("mcp_server.py")   # FastMCP infers stdio from the .py path
-    await client.__aenter__()          # keep the session open for all requests
+    client = Client("mcp_server.py")
+    await client.__aenter__()
     MCP = client
     GEMINI_TOOLS = _to_gemini_tools(await client.list_tools())
     print("Tools:                         ",GEMINI_TOOLS)

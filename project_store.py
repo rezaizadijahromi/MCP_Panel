@@ -1,4 +1,3 @@
-"""Project store — maps project ids to (product type, current params)."""
 from __future__ import annotations
 
 import json
@@ -8,8 +7,8 @@ import threading
 import math
 from dataclasses import dataclass, field, asdict
 
-import engine          # silencer  : DEFAULTS, generate(params) -> summary
-import engine_panel    # panel     : DEFAULTS, generate(params) -> summary
+import engine
+import engine_panel
 
 OUTPUT_DIR = engine.OUT_DIR
 DB_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "projects.db")
@@ -32,13 +31,10 @@ _PARAM_RULES = {
 
 
 def _err(message: str) -> dict:
-    """Structured failure the agent can read and relay (instead of an exception
-    that would abort the whole chat turn)."""
     return {"ok": False, "error": message}
 
 
 def _check_changes(product: str, changes: dict) -> str | None:
-    """Return an error message if any requested value is unusable, else None."""
     rules = _PARAM_RULES[product]
     for k, v in changes.items():
         rule = rules.get(k)
@@ -144,9 +140,6 @@ def _require(project_id: str) -> Project:
 
 
 def _prepare(project_id: str, expected_product: str, changes: dict) -> dict:
-    """Resolve + guard + validate + regenerate a candidate — but DO NOT save.
-    Shared core of every change. _err(...) on any problem, else an 'ok' dict
-    carrying the candidate params + summary. No lock here: callers hold _lock."""
     proj = _projects.get(project_id)
     if proj is None:
         return _err(f"no project '{project_id}'. Known: {list(_projects)}")
@@ -174,8 +167,6 @@ def _prepare(project_id: str, expected_product: str, changes: dict) -> dict:
 
 
 def _apply(project_id: str, expected_product: str, changes: dict) -> dict:
-    """Chat path: prepare AND persist, atomically. Chat has a human watching,
-    so it commits immediately. Behaviour is unchanged from before."""
     with _lock:
         prepared = _prepare(project_id, expected_product, changes)
         if not prepared.get("ok"):
@@ -191,14 +182,11 @@ def _apply(project_id: str, expected_product: str, changes: dict) -> dict:
 
 
 def propose_change(project_id: str, expected_product: str, changes: dict) -> dict:
-    """Email path: compute a change but DO NOT save. Caller stashes the returned
-    candidate_params and later calls commit_change() once a human confirms."""
     with _lock:
         return _prepare(project_id, expected_product, changes)
 
 
 def commit_change(project_id: str, candidate_params: dict) -> dict:
-    """Persist a previously-proposed candidate (used in step 4)."""
     with _lock:
         proj = _require(project_id)
         proj.params = candidate_params

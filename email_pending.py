@@ -1,9 +1,3 @@
-"""
-Email pending — STEP 4: hold proposals between 'detected' and 'confirmed'.
-Parked under a short token until a human confirms (commit) or rejects (discard).
-In-memory on purpose: pending items are short-lived. Back it with a SQLite table
-if you want them to survive a restart — nothing else would change.
-"""
 import secrets
 import threading
 

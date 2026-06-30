@@ -1,10 +1,3 @@
-"""
-Email intake — receive (1) -> extract (2) -> propose (3) -> confirm & commit (4).
-
-The webhook parks an actionable proposal; a human reviews it at /email/pending
-and clicks Confirm, which is the ONLY point in this whole flow that writes to
-the store.
-"""
 from fastapi import APIRouter
 from fastapi.responses import HTMLResponse, RedirectResponse
 from pydantic import BaseModel
@@ -24,7 +17,6 @@ class IncomingEmail(BaseModel):
     body: str
 
 
-# ---------------------------------------------------------------- receive (1-3)
 @router.post("/incoming")
 async def incoming(email: IncomingEmail):
     print(f"[email] from={email.sender!r} ({len(email.body)} chars)")
@@ -45,7 +37,6 @@ async def incoming(email: IncomingEmail):
     return {"received": True, "extracted": extracted, "proposal": proposal}
 
 
-# ------------------------------------------------------------- confirm (4)
 @router.get("/pending", response_class=HTMLResponse)
 def pending_page():
     return _pending_page_html()
@@ -54,7 +45,7 @@ def pending_page():
 @router.post("/confirm/{token}")
 def confirm(token: str):
     item = pending.pop(token)
-    if item is not None:                         # ignore stale / already-used tokens
+    if item is not None:
         store.commit_change(item["project_id"], item["candidate_params"])
         print(f"[email] committed {item['project_id']}: {item['changed']}")
     return RedirectResponse(url="/email/pending", status_code=303)
@@ -62,11 +53,10 @@ def confirm(token: str):
 
 @router.post("/reject/{token}")
 def reject(token: str):
-    pending.pop(token)                           # discard; nothing is written
+    pending.pop(token)
     return RedirectResponse(url="/email/pending", status_code=303)
 
 
-# ------------------------------------------------------------------- the page
 def _pending_page_html() -> str:
     items = pending.all_items()
     if not items:

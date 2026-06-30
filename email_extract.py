@@ -1,14 +1,6 @@
-"""
-Email extraction — STEP 2: turn an email body into structured data.
-
-ONE Gemini call, forced to return JSON in a fixed shape. This step only READS
-the email and reports what it found — it never calls an engine or touches the
-store. Acting on the result happens later, behind a human confirmation.
-"""
 import json
 from google.genai import types
 
-# What we want back from the model — a strict shape, no prose.
 EXTRACTION_SCHEMA = types.Schema(
     type="OBJECT",
     properties={
@@ -49,7 +41,6 @@ EXTRACT_SYSTEM = (
 
 
 async def extract_request(gemini, model: str, email_body: str) -> dict:
-    """Return {'project_name', 'changes', 'confidence'} parsed from the email."""
     resp = await gemini.aio.models.generate_content(
         model=model,
         contents=email_body,

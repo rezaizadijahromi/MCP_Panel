@@ -1,12 +1,6 @@
-"""
-Email propose — STEP 3: turn a step-2 extraction into a concrete proposal.
-Resolve the human project name to an id, map loose words ('length') to engine
-keys ('length_mm'), run the engine to compute new figures + drawing — WITHOUT
-saving. A human confirms (and only then commits) in step 4.
-"""
 import project_store as store
 
-CONFIDENCE_THRESHOLD = 0.5   # below this, treat the email as not requesting a change
+CONFIDENCE_THRESHOLD = 0.5
 
 _PARAM_ALIASES = {
     "silencer": {"length": "length_mm", "width": "width_mm", "height": "height_mm"},
