@@ -61,6 +61,10 @@ mcp_server.py     MCP tool definitions
 engine.py         Silencer drawing engine
 engine_panel.py   Panel drawing engine
 project_store.py  SQLite-backed project persistence
+email_intake.py   Email intake router (parse, review, confirm/reject)
+email_extract.py  Gemini-powered parameter extractor
+email_propose.py  Proposal builder from extracted parameters
+email_pending.py  In-memory store for pending change proposals
 data/             Mounted volume — contains projects.db
 output/           Generated drawings (Docker named volume)
 static/           Frontend assets
@@ -73,3 +77,12 @@ static/           Frontend assets
 | GET | `/api/health` | Health check |
 | POST | `/api/chat` | Send a message to the AI copilot |
 | GET | `/output/<file>` | Retrieve a generated drawing |
+
+### Email intake
+
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | `/email/incoming` | Receive an email (`sender`, `subject`, `body`); extracts parameters with Gemini and parks actionable changes for review |
+| GET | `/email/pending` | Browser UI listing all pending change proposals with confirm/reject buttons |
+| POST | `/email/confirm/{token}` | Approve a pending proposal and commit the parameter change to the project |
+| POST | `/email/reject/{token}` | Discard a pending proposal without making any changes |
