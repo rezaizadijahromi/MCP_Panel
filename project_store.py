@@ -141,47 +141,66 @@ def _require(project_id: str) -> Project:
         raise KeyError(f"no project '{project_id}'. Known: {list(_projects)}")
     return proj
 
-def _apply(project_id: str, expected_product: str, changes: dict) -> dict:
-    with _lock:
-        # 1. resolve the project (unknown id -> error the agent can relay)
-        proj = _projects.get(project_id)
-        if proj is None:
-            return _err(f"no project '{project_id}'. Known: {list(_projects)}")
 
-        # 2. product guard: don't run the silencer tool on a panel (or vice versa)
-        if proj.product != expected_product:
-            return _err(f"project '{project_id}' is a {proj.product}, not a "
-                        f"{expected_product}; use the {proj.product} tool instead")
 
-        # 3. keep only the parameters actually being changed
-        clean = {k: v for k, v in changes.items() if v is not None}
-        if not clean:
-            return _err("no parameters given to change")
-
-        # 4. guard the values BEFORE touching state or the engine, so a bad
-        #    argument can neither crash the engine nor corrupt the store
-        bad = _check_changes(proj.product, clean)
-        if bad:
-            return _err(bad)
-        clean = {k: float(v) for k, v in clean.items()}
-
-        # 5. regenerate from a candidate first; commit only if it succeeds, and
-        #    wrap it so any unexpected engine error becomes a structured result
-        #    rather than a crashed chat turn
-        candidate = dict(proj.params)
-        candidate.update(clean)
-        try:
-            summary = ENGINES[proj.product].generate(candidate, write_summary=False)
-        except Exception as e:                       # noqa: surface, don't crash
-            return _err(f"could not regenerate drawing: {e}")
-
-        proj.params = candidate
-        _save(proj)
-
+def _prepare(project_id: str, expected_product: str, changes: dict) -> dict:
+    """Resolve + guard + validate + regenerate a candidate — but DO NOT save.
+    Shared core of every change. _err(...) on any problem, else an 'ok' dict
+    carrying the candidate params + summary. No lock here: callers hold _lock."""
+    proj = _projects.get(project_id)
+    if proj is None:
+        return _err(f"no project '{project_id}'. Known: {list(_projects)}")
+    if proj.product != expected_product:
+        return _err(f"project '{project_id}' is a {proj.product}, not a "
+                    f"{expected_product}; use the {proj.product} tool instead")
+    clean = {k: v for k, v in changes.items() if v is not None}
+    if not clean:
+        return _err("no parameters given to change")
+    bad = _check_changes(proj.product, clean)
+    if bad:
+        return _err(bad)
+    clean = {k: float(v) for k, v in clean.items()}
+    candidate = dict(proj.params)
+    candidate.update(clean)
+    try:
+        summary = ENGINES[proj.product].generate(candidate, write_summary=False)
+    except Exception as e:                       # noqa: surface, don't crash
+        return _err(f"could not regenerate drawing: {e}")
     return {
-        "ok": True,
-        "project": asdict(proj),
-        "changed": clean,
-        "summary": summary,
-        "drawing_file": summary["drawing_file"],
+        "ok": True, "project_id": project_id, "product": proj.product,
+        "changed": clean, "candidate_params": candidate,
+        "summary": summary, "drawing_file": summary["drawing_file"],
     }
+
+
+def _apply(project_id: str, expected_product: str, changes: dict) -> dict:
+    """Chat path: prepare AND persist, atomically. Chat has a human watching,
+    so it commits immediately. Behaviour is unchanged from before."""
+    with _lock:
+        prepared = _prepare(project_id, expected_product, changes)
+        if not prepared.get("ok"):
+            return prepared
+        proj = _projects[project_id]
+        proj.params = prepared["candidate_params"]
+        _save(proj)
+        return {
+            "ok": True, "project": asdict(proj),
+            "changed": prepared["changed"], "summary": prepared["summary"],
+            "drawing_file": prepared["drawing_file"],
+        }
+
+
+def propose_change(project_id: str, expected_product: str, changes: dict) -> dict:
+    """Email path: compute a change but DO NOT save. Caller stashes the returned
+    candidate_params and later calls commit_change() once a human confirms."""
+    with _lock:
+        return _prepare(project_id, expected_product, changes)
+
+
+def commit_change(project_id: str, candidate_params: dict) -> dict:
+    """Persist a previously-proposed candidate (used in step 4)."""
+    with _lock:
+        proj = _require(project_id)
+        proj.params = candidate_params
+        _save(proj)
+        return {"ok": True, "project": asdict(proj)}
