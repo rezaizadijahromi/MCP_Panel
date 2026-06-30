@@ -1,12 +1,3 @@
-"""
-Acoustic panel design engine — params in, drawing + figures out.
-
-Layer build-up: incident sound → rockwool (absorber) | EPDM (damping) | steel (backing)
-
-Usage:
-    python engine_panel.py --rockwool 75
-    from engine_panel import generate, DEFAULTS
-"""
 import argparse
 import json
 import os
@@ -22,38 +13,31 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 OUT_DIR = os.path.join(HERE, "output")
 
 C_AIR = 343_000.0     # speed of sound, mm/s
-STEEL_DENSITY = 7850.0  # kg/m^3, for the steel surface-mass figure
+STEEL_DENSITY = 7850.0  # kg/m^3
 
-# Baseline panel. The stratification (through-thickness layer build-up) is what
-# drives the acoustic performance; the face size is cosmetic / for the BOM.
 DEFAULTS = {
-    "panel_width_mm":   600.0,   # panel face width
-    "panel_height_mm": 1200.0,   # panel face height
-    "rockwool_mm":       50.0,   # porous absorber (rockwool) facing the sound
-    "epdm_mm":            6.0,   # viscoelastic damping membrane
-    "steel_mm":           2.0,   # rigid steel mass backing
+    "panel_width_mm":   600.0,
+    "panel_height_mm": 1200.0,
+    "rockwool_mm":       50.0,
+    "epdm_mm":            6.0,
+    "steel_mm":           2.0,
 }
 
 
-# ----------------------------------------------------------------------
-# 1. DETERMINISTIC PHYSICS  (simplified backed-absorber model)
-# ----------------------------------------------------------------------
 def _derive(p):
     rockwool = float(p["rockwool_mm"])
     epdm = float(p["epdm_mm"])
     steel = float(p["steel_mm"])
 
     total_depth = rockwool + epdm + steel
-    d_eff = rockwool                         # porous depth in front of the rigid steel
+    d_eff = rockwool
 
     # Peak absorption near the quarter-wavelength resonance of the porous layer.
     f_peak = round(C_AIR / (4.0 * d_eff) / 10.0) * 10.0   # Hz
 
-    # More rockwool -> higher/broader peak; the EPDM adds a little damping.
     alpha_peak = min(0.99, 0.55 + rockwool / 200.0 + epdm / 80.0)
     alpha_peak = round(alpha_peak, 2)
 
-    # NRC = mean absorption at the four standard octave bands, to nearest 0.05.
     bands = [250.0, 500.0, 1000.0, 2000.0]
     a_bands = [_alpha_at(f, f_peak, alpha_peak) for f in bands]
     nrc = round(round((sum(a_bands) / len(a_bands)) / 0.05) * 0.05, 2)
@@ -91,9 +75,6 @@ def _merge(params):
     return p
 
 
-# ----------------------------------------------------------------------
-# 2. DRAWING
-# ----------------------------------------------------------------------
 def _draw(p, d, out_path):
     rockwool, epdm, steel = p["rockwool_mm"], p["epdm_mm"], p["steel_mm"]
     W, H = p["panel_width_mm"], p["panel_height_mm"]
@@ -177,12 +158,7 @@ def _draw(p, d, out_path):
     plt.close(fig)
 
 
-# ----------------------------------------------------------------------
-# 3. PUBLIC ENTRY POINT
-# ----------------------------------------------------------------------
 def generate(params, out_dir=None, write_summary=False):
-    """Generate the panel drawing for `params`. Returns a summary dict including
-    the drawing path. Missing params fall back to DEFAULTS."""
     out_dir = out_dir or OUT_DIR
     os.makedirs(out_dir, exist_ok=True)
 

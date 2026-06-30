@@ -1,13 +1,3 @@
-"""
-Splitter silencer design engine — params in, drawing + figures out.
-
-Geometry: W/8 splitter | W/4 air | W/4 splitter | W/4 air | W/8 splitter
-(50% open-area ratio by construction; airway gap = W/4)
-
-Usage:
-    python engine.py --length 1200 --width 1000 --height 1000
-    from engine import generate, DEFAULTS
-"""
 import argparse
 import json
 import os
@@ -25,18 +15,13 @@ OUT_DIR = os.path.join(HERE, "output")
 C_AIR = 343_000.0  # speed of sound, mm/s
 
 DEFAULTS = {
-    "length_mm": 1500.0,   # splitter length (acoustic length, airflow direction)
-    "width_mm":  1000.0,   # cross-section width  (baffles are laid out across this)
-    "height_mm": 1000.0,   # cross-section height (splitters span the full height)
+    "length_mm": 1500.0,
+    "width_mm":  1000.0,
+    "height_mm": 1000.0,
 }
 
 
-# ----------------------------------------------------------------------
-# 1. BAFFLE LAYOUT
-# ----------------------------------------------------------------------
 def _layout(W):
-    """Return the left->right spans across the width as (kind, x0, x1) plus the
-    key thicknesses. Fixed build-up: W/8 + W/4 + W/4 + W/4 + W/8."""
     s_side = W / 8.0          # side splitters (half-thickness)
     s_mid = W / 4.0           # middle splitter (full)
     gap = W / 4.0             # each airway gap
@@ -50,19 +35,15 @@ def _layout(W):
     return spans, s_side, s_mid, gap
 
 
-# ----------------------------------------------------------------------
-# 2. PHYSICS
-# ----------------------------------------------------------------------
 def _derive(p):
-    """Derive geometry + acoustic figures from the input parameters."""
     L = float(p["length_mm"])
     W = float(p["width_mm"])
     H = float(p["height_mm"])
 
     spans, s_side, s_mid, gap = _layout(W)
-    solid = 2 * s_side + s_mid                 # total splitter material across W
-    open_width = W - solid                     # total airway across W
-    open_ratio = open_width / W                # == 0.5 by construction
+    solid = 2 * s_side + s_mid
+    open_width = W - solid
+    open_ratio = open_width / W
 
     default_gap = DEFAULTS["width_mm"] / 4.0
     peak_TL = (L / 30.0) * (default_gap / gap)
@@ -85,7 +66,6 @@ def _derive(p):
 
 
 def _tl_curve(f_peak, peak_TL):
-    """A smooth TL-vs-frequency curve peaking at (f_peak, peak_TL)."""
     f = np.logspace(np.log10(50), np.log10(5000), 240)
     sigma = 0.85
     tl = peak_TL * np.exp(-(np.log(f / f_peak) ** 2) / (2 * sigma ** 2))
@@ -93,7 +73,6 @@ def _tl_curve(f_peak, peak_TL):
 
 
 def _merge(params):
-    """Fill any missing parameter from DEFAULTS and coerce to numbers."""
     p = dict(DEFAULTS)
     for k, v in (params or {}).items():
         if k in p and v is not None:
@@ -103,12 +82,7 @@ def _merge(params):
     return p
 
 
-# ----------------------------------------------------------------------
-# 3. DRAWING
-# ----------------------------------------------------------------------
 def _cuboid_faces(x0, x1, y0, y1, z0, z1):
-    """The 6 faces of an axis-aligned box, ordered:
-    bottom, top, front(y0), back(y1), left(x0), right(x1)."""
     c = [(x0, y0, z0), (x1, y0, z0), (x1, y1, z0), (x0, y1, z0),
          (x0, y0, z1), (x1, y0, z1), (x1, y1, z1), (x0, y1, z1)]
     return [
@@ -122,13 +96,11 @@ def _cuboid_faces(x0, x1, y0, y1, z0, z1):
 
 
 def _draw_iso(ax, p, d):
-    """Isometric 3D view of the duct + baffles, with L/W/H dimensions."""
     L, W, H = p["length_mm"], p["width_mm"], p["height_mm"]
     spans = d["_spans"]
 
     ax.set_axis_off()
 
-    # Outer duct envelope as a light wireframe (no solid casing / mounting walls).
     corners = [(0, 0, 0), (W, 0, 0), (W, L, 0), (0, L, 0),
                (0, 0, H), (W, 0, H), (W, L, H), (0, L, H)]
     box_edges = [(0, 1), (1, 2), (2, 3), (3, 0), (4, 5), (5, 6),
@@ -139,7 +111,6 @@ def _draw_iso(ax, p, d):
                 [corners[a][2], corners[b][2]],
                 color="#465260", lw=1.0)
 
-    # Splitters as shaded solid slabs (top lighter, sides darker -> 3d feel).
     face_cols = ["#3c454f", "#8d9aa8", "#647284", "#56616f", "#4a545f", "#414b55"]
     for kind, x0, x1 in spans:
         if kind != "splitter":
@@ -150,7 +121,6 @@ def _draw_iso(ax, p, d):
         pc.set_zsort("average")
         ax.add_collection3d(pc)
 
-    # --- dimension lines + labels -----------------------------------------
     red = "#c0392b"
     ink = "#26333f"
     ox = -0.12 * W      # offset to the left  (for H)
@@ -220,12 +190,7 @@ def _draw(p, d, out_path):
     plt.close(fig)
 
 
-# ----------------------------------------------------------------------
-# 4. ENTRY POINT
-# ----------------------------------------------------------------------
 def generate(params, out_dir=None, write_summary=False):
-    """Generate the drawing for `params` (a dict). Returns a summary dict
-    including the drawing path. Missing params fall back to DEFAULTS."""
     out_dir = out_dir or OUT_DIR
     os.makedirs(out_dir, exist_ok=True)
 

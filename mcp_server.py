@@ -1,4 +1,3 @@
-"""MCP server — exposes the design engines as tools (stdio transport)."""
 from fastmcp import FastMCP
 
 import project_store as store
