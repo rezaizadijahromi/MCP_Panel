@@ -30,6 +30,7 @@ _PARAM_RULES = {
 }
 
 
+
 def _err(message: str) -> dict:
     return {"ok": False, "error": message}
 
@@ -108,13 +109,45 @@ def _load() -> None:
 
 _load()
 
+def _seed_if_empty() -> None:
+    with _db() as conn:
+        n = conn.execute("SELECT COUNT(*) FROM projects").fetchone()[0]
+        if n == 0:
+            for p in _SEED:
+                conn.execute(
+                    "INSERT INTO projects (id, name, product, params) VALUES (?,?,?,?)",
+                    (p.id, p.name, p.product, json.dumps(p.params)),
+                )
+            conn.commit()
+
+_seed_if_empty()   # runs in each process, but only fills the DB if it's empty
+
+
+def _get(project_id: str) -> Project | None:
+    with _db() as conn:
+        row = conn.execute(
+            "SELECT id, name, product, params FROM projects WHERE id = ?",
+            (project_id,)).fetchone()
+    if row is None:
+        return None
+    id_, name, product, params_json = row
+    return Project(id_, name, product, json.loads(params_json))
+
+
+
 
 def list_projects() -> list[dict]:
-    return [asdict(p) for p in _projects.values()]
+    with _db() as conn:
+        rows = conn.execute(
+            "SELECT id, name, product, params FROM projects").fetchall()
+    return [asdict(Project(i, n, p, json.loads(pj))) for i, n, p, pj in rows]
 
 
 def get_project(project_id: str) -> dict:
-    return asdict(_require(project_id))
+    proj = _get(project_id)
+    if proj is None:
+        raise KeyError(f"no project '{project_id}'")
+    return asdict(proj)
 
 
 def update_silencer(project_id: str, length_mm=None, width_mm=None, height_mm=None) -> dict:
@@ -140,7 +173,7 @@ def _require(project_id: str) -> Project:
 
 
 def _prepare(project_id: str, expected_product: str, changes: dict) -> dict:
-    proj = _projects.get(project_id)
+    proj = _get(project_id)                      # <-- was _projects.get(...)
     if proj is None:
         return _err(f"no project '{project_id}'. Known: {list(_projects)}")
     if proj.product != expected_product:
